@@ -1,12 +1,15 @@
+{-# LANGUAGE DeriveTraversable #-}
 module Rendering
   ( renderGame
-  , Library(..)
+  , Library(..), libraryBmpPaths
   ) where
 
 import GameBoard
 
 -- I want to use my own Vector.
 import Graphics.Gloss hiding (Vector)
+
+import System.FilePath
 
 -- | colors
 scoreColor = orange
@@ -26,15 +29,32 @@ stateBGColor = black
 itemColor = yellow
 
 -- | Images library
-data Library = Library
-  { brickImg :: Picture
-  , mainMenuImg :: Picture
-  , winImg :: Picture
-  , gameOverImg :: Picture
-  , nextLevelImg :: Picture
-  , haskellLogoImg :: Picture
-  , pausedImg :: Picture
-  }
+data Library a = Library
+  { brickImg :: a
+  , mainMenuImg :: a
+  , winImg :: a
+  , gameOverImg :: a
+  , nextLevelImg :: a
+  , haskellLogoImg :: a
+  , pausedImg :: a
+  } deriving (Functor, Foldable, Traversable)
+
+libraryNames :: Library String
+libraryNames = Library
+    { brickImg = "purpleBrick"
+    , mainMenuImg = "mainMenu"
+    , winImg = "win"
+    , gameOverImg = "gameOver"
+    , nextLevelImg = "nextLevel"
+    , haskellLogoImg = "haskellLogo"
+    , pausedImg = "paused"
+    }
+
+libraryBmpPaths :: Library FilePath
+libraryBmpPaths =
+    fmap toPath libraryNames
+    where
+        toPath name = "library" </> name <.> "bmp"
 
 -- | Render score
 renderScore ::
@@ -127,7 +147,7 @@ renderBackground c = color c $ rectangleSolid gameWidth gameHeight
 -- | render the game
 renderGame ::
      Game -- ^ The game state to render
-  -> Library -- ^ image library
+  -> Library Picture -- ^ image library
   -> Picture -- ^ A picture of this game state
 -- MainMenu state
 renderGame game@Game {gameState = MainMenu} library = mainMenuImg library

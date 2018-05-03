@@ -12,7 +12,7 @@ import Rendering
 import Graphics.Gloss hiding (Vector)
 
 -- | World (with the game and the image library)
-type World = (Game, Library)
+type World = (Game, Library Picture)
 
 -- | render IO World
 renderWorldIO :: World -> IO Picture

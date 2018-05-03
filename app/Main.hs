@@ -9,6 +9,8 @@ import Lib
 import Physics
 import Rendering
 
+import Control.Lens
+
 -- Conflict with the type Vector in module Maths
 import Graphics.Gloss hiding (Vector)
 
@@ -21,13 +23,7 @@ background = greyN 0.1
 
 -- | update world
 updateWorldIO :: Float -> World -> IO World
-updateWorldIO s w@(g, l) = do
-  game <- updateIO s (fst w)
-  return (game, l)
-
--- | update de the game in IO
-updateIO :: Float -> Game -> IO Game
-updateIO seconds game = return $ update seconds game
+updateWorldIO s = pure . over _1 (update s)
 
 -- | Update the game state
 update ::
@@ -50,25 +46,8 @@ update seconds game@Game {gameState = Playing} =
 update _ game = game
 
 -- | load library
-loadLibrary :: IO Library
-loadLibrary = do
-  (brickImg :: Picture) <- loadBMP "./library/purpleBrick.bmp"
-  (mainMenuImg :: Picture) <- loadBMP "./library/mainMenu.bmp"
-  (winImg :: Picture) <- loadBMP "./library/win.bmp"
-  (gameOverImg :: Picture) <- loadBMP "./library/gameOver.bmp"
-  (nextLevelImg :: Picture) <- loadBMP "./library/nextLevel.bmp"
-  (haskellLogoImg :: Picture) <- loadBMP "./library/haskellLogo.bmp"
-  (pausedImg :: Picture) <- loadBMP "./library/paused.bmp"
-  return
-    Library
-      { brickImg = brickImg
-      , mainMenuImg = mainMenuImg
-      , winImg = winImg
-      , gameOverImg = gameOverImg
-      , nextLevelImg = nextLevelImg
-      , haskellLogoImg = haskellLogoImg
-      , pausedImg = pausedImg
-      }
+loadLibrary :: IO (Library Picture)
+loadLibrary = traverse loadBMP libraryBmpPaths
 
 -- | Window
 window :: Display
@@ -78,22 +57,10 @@ window = InWindow "Haskell Breakout" (winWidth, winHeight) (offset, offset)
 fps :: Int
 fps = 60
 
--- | Main
-playIO' ::
-     Display
-  -> Color
-  -> Int
-  -> World
-  -> (World -> IO Picture)
-  -> (Event -> World -> IO World)
-  -> (Float -> World -> IO World)
-  -> IO ()
-playIO' = playIO
-
 main :: IO ()
 main = do
   library <- loadLibrary
-  playIO'
+  playIO
     window
     background
     fps
