@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module GameBoard
   ( winHeight
@@ -30,7 +30,21 @@ module GameBoard
   , ItemType(..)
   , Brick(..)
   , Game(..)
+    -- | Lenses
+      , gameState
+      , gameScore
+      , mouseEvent
+      , ballLoc
+      , ballVel
+      , ballDots
+      , bricks
+      , paddle
+      , items
+      , level
   , Paddle(..)
+      , paddleLoc
+      , paddleVel
+      , paddleWidth
   , GameState(..)
   , Item(..)
   , GameLevel
@@ -42,6 +56,8 @@ module GameBoard
 
 -- I want to use my own Vector.
 import Graphics.Gloss hiding (Vector)
+
+import Control.Lens hiding (Level)
 
 import System.Random
 
@@ -145,10 +161,12 @@ data Brick = Brick
 
 -- | Paddle
 data Paddle = Paddle
-  { paddleLoc :: Position -- ^ paddle (x, y) location
-  , paddleVel :: Velocity -- ^ paddle velocity
-  , paddleWidth :: Width -- ^ paddle width
+  { _paddleLoc :: Position -- ^ paddle (x, y) location
+  , _paddleVel :: Velocity -- ^ paddle velocity
+  , _paddleWidth :: Width -- ^ paddle width
   } deriving (Show)
+
+makeLenses ''Paddle
 
 -- | Item
 data Item = Item
@@ -158,17 +176,19 @@ data Item = Item
 
 -- | Game
 data Game = Game
-  { gameState :: GameState -- ^ game state
-  , gameScore :: Score -- ^ game score
-  , mouseEvent :: Bool -- ^ if the system got a mouse event since last update
-  , ballLoc :: Position -- ^ ball (x, y) location.
-  , ballVel :: Velocity -- ^ ball (x, y) velocity
-  , ballDots :: [Position] -- ^ dot used for the collision 3 vectors
-  , bricks :: [Brick] -- ^ bricks list
-  , paddle :: Paddle -- ^ paddle
-  , items :: [Item] -- ^ items falling
-  , level :: GameLevel -- ^ level number
+  { _gameState :: GameState -- ^ game state
+  , _gameScore :: Score -- ^ game score
+  , _mouseEvent :: Bool -- ^ if the system got a mouse event since last update
+  , _ballLoc :: Position -- ^ ball (x, y) location.
+  , _ballVel :: Velocity -- ^ ball (x, y) velocity
+  , _ballDots :: [Position] -- ^ dot used for the collision 3 vectors
+  , _bricks :: [Brick] -- ^ bricks list
+  , _paddle :: Paddle -- ^ paddle
+  , _items :: [Item] -- ^ items falling
+  , _level :: GameLevel -- ^ level number
   } deriving (Show)
+
+makeLenses ''Game
 
 -- | Transform a brick to a rectangle
 brickToRectangle ::
@@ -180,7 +200,7 @@ brickToRectangle b = (brickLoc b, brickWidth, brickHeight)
 paddleToRectangle ::
      Paddle -- ^ paddle to transform
   -> Rectangle -- ^ paddle transformed to a rectangle
-paddleToRectangle p = (paddleLoc p, paddleWidth p, paddleHeight)
+paddleToRectangle p = (p ^. paddleLoc, p ^. paddleWidth, paddleHeight)
 
 -- |  Foldbrick function to use in the foldr
 --    From a tuple of a ranomGen and list of bricks and a position,
@@ -200,7 +220,7 @@ foldBrick level pos (sgItem, sgBrick, bricks) =
         False -> (newSGItem', newSGBrick, Brick yellow Nothing pos : bricks)
     False -> (newSGItem', newSGBrick, bricks)
   where
-    (isItem :: Bool, newSGItem) = random sgItem
+    (isItem, newSGItem) = random sgItem
     (rItem, newSGItem') = randomR (1 :: Integer, 2) newSGItem
     itemType =
       case rItem of
@@ -242,21 +262,21 @@ addScore = (+ 10)
 initialState :: Game
 initialState =
   Game
-  { gameState = MainMenu
-  , gameScore = 0
-  , mouseEvent = False
-  , ballLoc = (0, -200)
-  , ballVel = (50, 200)
-  , ballDots = [(0, 0)]
-  , bricks = mkLevel 1
-  , paddle =
+  { _gameState = MainMenu
+  , _gameScore = 0
+  , _mouseEvent = False
+  , _ballLoc = (0, -200)
+  , _ballVel = (50, 200)
+  , _ballDots = [(0, 0)]
+  , _bricks = mkLevel 1
+  , _paddle =
       Paddle
-      { paddleLoc = (0, -(gameHeight / 2) + 50)
-      , paddleVel = (0, 0)
-      , paddleWidth = 100
+      { _paddleLoc = (0, -(gameHeight / 2) + 50)
+      , _paddleVel = (0, 0)
+      , _paddleWidth = 100
       }
-  , items = []
-  , level = 1
+  , _items = []
+  , _level = 1
   }
 
 -- | new Level
@@ -266,19 +286,19 @@ newLevelState ::
   -> Game -- ^ new game state
 newLevelState l s =
   Game
-  { gameState = NextLevel
-  , gameScore = s
-  , mouseEvent = False
-  , ballLoc = (0, -200)
-  , ballVel = (50, 150)
-  , ballDots = [(0, 0)]
-  , bricks = mkLevel l
-  , paddle =
+  { _gameState = NextLevel
+  , _gameScore = s
+  , _mouseEvent = False
+  , _ballLoc = (0, -200)
+  , _ballVel = (50, 150)
+  , _ballDots = [(0, 0)]
+  , _bricks = mkLevel l
+  , _paddle =
       Paddle
-      { paddleLoc = (0, -(gameHeight / 2) + 50)
-      , paddleVel = (0, 0)
-      , paddleWidth = 100
+      { _paddleLoc = (0, -(gameHeight / 2) + 50)
+      , _paddleVel = (0, 0)
+      , _paddleWidth = 100
       }
-  , items = []
-  , level = l
+  , _items = []
+  , _level = l
   }

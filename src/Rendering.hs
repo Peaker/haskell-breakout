@@ -9,6 +9,7 @@ import GameBoard
 -- I want to use my own Vector.
 import Graphics.Gloss hiding (Vector)
 
+import Control.Lens hiding ((<.>))
 import System.FilePath
 
 -- | colors
@@ -84,13 +85,13 @@ renderDot c radius (x, y) = translate x y $ color c $ circleSolid radius
 
 -- | render state text
 renderStateText ::
-     Color -- ^ Text color
-  -> String -- ^ Text
+     Show a =>
+     a -- ^ Text
   -> Position -- ^ Text position
   -> (Float, Float) -- ^ Scaling factors along X and Y dimensions.
   -> Picture -- ^ Picture of the text
-renderStateText col text (x, y) (sx, sy) =
-  translate x y $ scale sx sy $ color col $ Text text
+renderStateText text (x, y) (sx, sy) =
+  translate x y $ scale sx sy $ color stateText $ Text (show text)
 
 -- | render wall
 renderWall ::
@@ -150,43 +151,40 @@ renderGame ::
   -> Library Picture -- ^ image library
   -> Picture -- ^ A picture of this game state
 -- MainMenu state
-renderGame game@Game {gameState = MainMenu} library = mainMenuImg library
--- GameOver state
-renderGame game@Game {gameState = GameOver} library =
-  pictures
-    [ gameOverImg library
-    , renderStateText stateText (show $ level game) (-0, -175) (0.25, 0.25)
-    , renderStateText stateText (show $ gameScore game) (-20, -300) (0.25, 0.25)
-    ]
--- Win state
-renderGame game@Game {gameState = Win} library =
-  pictures
-    [ winImg library
-    , renderStateText stateText (show $ level game) (-0, -175) (0.25, 0.25)
-    , renderStateText stateText (show $ gameScore game) (-20, -300) (0.25, 0.25)
-    ]
--- Paused state
-renderGame game@Game {gameState = Paused} library = pausedImg library
--- Between two levels state
-renderGame game@Game {gameState = NextLevel} library =
-  pictures
-    [ nextLevelImg library
-    , renderStateText stateText (show $ level game) (0, -125) (0.25, 0.25)
-    , renderStateText stateText (show $ gameScore game) (0, -275) (0.25, 0.25)
-    ]
--- Playing state
-renderGame game@Game {gameState = Playing} library =
-  pictures
-    [ renderBall ballColor 10 (ballLoc game)
-    , renderWall wallColor gameWidth wallWidth wallUpPos
-    , renderWall wallColor wallWidth (gameHeight + wallWidth * 2) wallLeftPos
-    , renderWall wallColor wallWidth (gameHeight + wallWidth * 2) wallRightPos
-    , renderPaddle paddleColor paddleW paddleHeight (paddleLoc $ paddle game)
-    , pictures . fmap (renderBrick $ brickImg library) $ bricks game
-      -- , pictures . fmap (renderDot white 2) $ ballDots game
-    , pictures . fmap (renderItem itemColor) $ items game
-    , renderScore scoreColor (gameScore game)
-    , renderGameLevel levelColor (level game)
-    ]
+renderGame game library =
+    case game ^. gameState of
+    MainMenu -> mainMenuImg library
+    GameOver ->
+      pictures
+        [ gameOverImg library
+        , renderStateText (game ^. level) (-0, -175) (0.25, 0.25)
+        , renderStateText (game ^. gameScore) (-20, -300) (0.25, 0.25)
+        ]
+    Win ->
+      pictures
+        [ winImg library
+        , renderStateText (game ^. level) (-0, -175) (0.25, 0.25)
+        , renderStateText (game ^. gameScore) (-20, -300) (0.25, 0.25)
+        ]
+    Paused -> pausedImg library
+    NextLevel ->
+      pictures
+        [ nextLevelImg library
+        , renderStateText (game ^. level) (0, -125) (0.25, 0.25)
+        , renderStateText (game ^. gameScore) (0, -275) (0.25, 0.25)
+        ]
+    Playing ->
+      pictures
+        [ renderBall ballColor 10 (game ^. ballLoc)
+        , renderWall wallColor gameWidth wallWidth wallUpPos
+        , renderWall wallColor wallWidth (gameHeight + wallWidth * 2) wallLeftPos
+        , renderWall wallColor wallWidth (gameHeight + wallWidth * 2) wallRightPos
+        , renderPaddle paddleColor paddleW paddleHeight (game ^. paddle . paddleLoc)
+        , pictures . fmap (renderBrick $ brickImg library) $ game ^. bricks
+          -- , pictures . fmap (renderDot white 2) $ ballDots game
+        , pictures . fmap (renderItem itemColor) $ game ^. items
+        , renderScore scoreColor (game ^. gameScore)
+        , renderGameLevel levelColor (game ^. level)
+        ]
   where
-    paddleW = paddleWidth $ paddle game
+    paddleW = game ^. paddle . paddleWidth

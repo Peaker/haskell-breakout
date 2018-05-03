@@ -31,7 +31,7 @@ update ::
   -> Game -- ^ current game state
   -> Game -- ^ A new game state with an updated ball and paddles positions.
 -- Game playing
-update seconds game@Game {gameState = Playing} =
+update seconds game@Game {_gameState = Playing} =
   isGameOver .
   isLevelOver .
   itemsBounce .

@@ -19,6 +19,8 @@ import Data.List (sortOn)
 import Data.Maybe
 import GameBoard
 
+import Control.Lens
+
 import Maths
 
 -- aliases
@@ -26,21 +28,21 @@ type Seconds = Float
 
 -- Speed up the ball
 speedUp :: Position -> Position
-speedUp (x, y) = (speedRatio * x, speedRatio * y)
+speedUp = mul (speedRatio, speedRatio)
 
 -- | update the 3 dots position used to calculate the collision vectors
 computeBallDots ::
      Game -- ^ current state game
   -> Game -- ^ game updated
-computeBallDots game = game {ballDots = [dot1, dot2, dot3]}
+computeBallDots game = set ballDots [dot1, dot2, dot3] game
   where
-    dot1 = computeBallDot (ballLoc game) (ballVel game) ballRadius
-    dot2 = computeBallDot (ballLoc game) nv ballRadius
+    dot1 = computeBallDot (game ^. ballLoc) (game ^. ballVel) ballRadius
+    dot2 = computeBallDot (game ^. ballLoc) nv ballRadius
       where
-        nv = matrixMultiplication ((0, 1), (-1, 0)) (ballVel game)
-    dot3 = computeBallDot (ballLoc game) nv ballRadius
+        nv = matrixMultiplication ((0, 1), (-1, 0)) (game ^. ballVel)
+    dot3 = computeBallDot (game ^. ballLoc) nv ballRadius
       where
-        nv = matrixMultiplication ((0, -1), (1, 0)) (ballVel game)
+        nv = matrixMultiplication ((0, -1), (1, 0)) (game ^. ballVel)
 
 -- | Update the dot position with the velocity
 computeBallDot ::
@@ -59,47 +61,39 @@ moveBall ::
      Seconds -- ^ The number of seconds since last Update
   -> Game -- ^ current game state
   -> Game -- ^ A new game state with an updated ball position
-moveBall seconds game = game {ballLoc = (x', y')}
+moveBall seconds game = over ballLoc (add delta) game
         -- Old locations and velocities
   where
-    (x, y) = ballLoc game
-    (vx, vy) = ballVel game
-        -- New locations
-    x' = x + vx * seconds
-    y' = y + vy * seconds
+    delta = mul (seconds, seconds) (game ^. ballVel)
 
 -- | Update the paddle position aand stop it if it goes throught the wall
 movePaddle ::
      Game -- ^ current game state
   -> Game -- ^ Game paddle position updated
 movePaddle game
-      -- No step , no mouvement
-  | vel == 0 = game
-      -- Lefter than left wall, but trying to go right.
-  | x - halfPaddle <= leftGameBorder && vel > 0 =
-    let newLoc = (x + (paddleStep * vel), y)
-    in game {paddle = (paddle game) {paddleLoc = newLoc}}
-      -- You are going into the left wall
-  | x - halfPaddle <= leftGameBorder && vel < 0 =
-    let newLoc = (leftGameBorder + halfPaddle, y)
-    in game {paddle = (paddle game) {paddleLoc = newLoc}}
-      -- Righter than right wall , but trying to go left.
-  | x + halfPaddle >= rightGameBorder && vel < 0 =
-    let newLoc = (x + (paddleStep * vel), y)
-    in game {paddle = (paddle game) {paddleLoc = newLoc}}
-      -- You are going into the right wall
-  | x + halfPaddle >= rightGameBorder && vel > 0 =
-    let newLoc = (rightGameBorder - halfPaddle, y)
-    in game {paddle = (paddle game) {paddleLoc = newLoc}}
-      -- Between the two walls
-  | x - halfPaddle > leftGameBorder && x + halfPaddle < rightGameBorder =
-    let newLoc = (x + (paddleStep * vel), y)
-    in game {paddle = (paddle game) {paddleLoc = newLoc}}
-  | otherwise = game
+  = over (paddle . paddleLoc) move game
   where
-    (x, y) = paddleLoc $ paddle game
-    vel = fst $ paddleVel $ paddle game
-    halfPaddle = paddleWidth (paddle game) / 2
+    move (x, y)
+          -- No step , no mouvement
+      | vel == 0 = (x, y)
+          -- Lefter than left wall, but trying to go right.
+      | x - halfPaddle <= leftGameBorder && vel > 0 =
+        (x + paddleStep * vel, y)
+          -- You are going into the left wall
+      | x - halfPaddle <= leftGameBorder && vel < 0 =
+        (leftGameBorder + halfPaddle, y)
+          -- Righter than right wall , but trying to go left.
+      | x + halfPaddle >= rightGameBorder && vel < 0 =
+        (x + (paddleStep * vel), y)
+          -- You are going into the right wall
+      | x + halfPaddle >= rightGameBorder && vel > 0 =
+        (rightGameBorder - halfPaddle, y)
+          -- Between the two walls
+      | x - halfPaddle > leftGameBorder && x + halfPaddle < rightGameBorder =
+        (x + (paddleStep * vel), y)
+      | otherwise = (x, y)
+    vel = game ^. paddle . paddleVel . _1
+    halfPaddle = game ^. paddle . paddleWidth / 2
     leftGameBorder = -(gameWidth / 2) + wallWidth / 2
     rightGameBorder = gameWidth / 2 - wallWidth / 2
     paddleStep = 1
@@ -107,27 +101,18 @@ movePaddle game
 itemsBounce :: Game -> Game
 itemsBounce game = go itemTypeList game
   where
-    (itemsUpdated, itemTypeList) = itemsCollision (paddle game) (items game)
+    (itemsUpdated, itemTypeList) = itemsCollision (game ^. paddle) (game ^. items)
     go :: [ItemType] -> Game -> Game
-    go [] game = game {items = itemsUpdated}
-    go (PaddleExpander:xs) game =
-      go xs game {paddle = p {paddleWidth = paddleW + 10}}
-      where
-        p = paddle game
-        paddleW = paddleWidth p
-    go (PaddleMinifier:xs) game =
-      go xs game {paddle = p {paddleWidth = paddleW - 10}}
-      where
-        p = paddle game
-        paddleW = paddleWidth p
+    go [] game = set items itemsUpdated game
+    go (PaddleExpander:xs) game = go xs (changeWidth (+10) game)
+    go (PaddleMinifier:xs) game = go xs (changeWidth (subtract 10) game)
+    changeWidth = over (paddle . paddleWidth)
 
 -- | Update the items positions
 moveItems ::
      Game -- ^ game to update
   -> Game -- ^ game updated
-moveItems game = game {items = itemsUpdated}
-  where
-    itemsUpdated = catMaybes . fmap (moveItem itemVel) $ items game
+moveItems = over items (mapMaybe (moveItem itemVel))
 
 -- | update item position
 moveItem ::
@@ -150,17 +135,17 @@ bricksBounce s game =
     Nothing -> game
     Just (vx, vy) ->
       game
-      { bricks = bricksUpdated
-      , ballVel = speedUp (vx / s, vy / s)
-      , gameScore = addScore score
-      , items = itemsUpdated ++ itemLts
+      { _bricks = bricksUpdated
+      , _ballVel = speedUp (vx / s, vy / s)
+      , _gameScore = addScore score
+      , _items = itemsUpdated ++ itemLts
       }
   where
     (bc, bricksUpdated, itemsUpdated) =
-      bricksCollision (vx * s, vy * s) (ballDots game) (bricks game)
-    (vx, vy) = ballVel game
-    score = gameScore game
-    itemLts = items game
+      bricksCollision (vx * s, vy * s) (game ^. ballDots) (game ^. bricks)
+    (vx, vy) = game ^. ballVel
+    score = game ^. gameScore
+    itemLts = game ^. items
 
 -- | Detect collision on the paddle and change velocity and score
 paddleBounce ::
@@ -170,15 +155,16 @@ paddleBounce ::
 paddleBounce s game =
   case nws of
     Nothing -> game
-    Just t -> game {ballVel = (nsX / s + (paddleV * 50), nsY / s)}
-      where (nsX, nsY) = collisionToSpeed t (ballVX * s, ballVY * s)
+    Just t -> over ballVel (onVel t) game
   where
-    paddleV = fst $ paddleVel $ paddle game
-    dots = ballDots game
-    (ballVX, ballVY) = ballVel game
+    onVel t =
+        add (paddleV * 50, 0) .
+        mul (1/s, 1/s) . collisionToSpeed t . mul (s, s)
+    paddleV = game ^. paddle . paddleVel . _1
+    dots = game ^. ballDots
     nws =
-      detectDotsCollision (ballVX * s, ballVY * s) dots $
-      paddleToRectangle $ paddle game
+      detectDotsCollision (mul (s, s) (game ^. ballVel)) dots $
+      paddleToRectangle $ game ^. paddle
 
 -- | Detect collision on the walls and change ball velocity
 wallsBounce ::
@@ -188,11 +174,10 @@ wallsBounce ::
 wallsBounce s game =
   case collisions of
     [] -> game
-    (x:xs) -> game {ballVel = collisionToSpeed x (ballVX, ballVY)}
+    (x:xs) -> over ballVel (collisionToSpeed x) game
   where
-    dots = ballDots game
-    (ballVX, ballVY) = ballVel game
-    speed = (ballVX * s, ballVY * s)
+    dots = game ^. ballDots
+    speed = mul (s, s) (game ^. ballVel)
     gameWalls =
       [ (wallUpPos, gameWidth, wallWidth)
       , (wallLeftPos, wallWidth, gameHeight)
@@ -206,16 +191,16 @@ resetPaddleVel ::
      Game -- ^ current game state
   -> Game -- ^ game updated
 resetPaddleVel game =
-  if mouseEvent game
-    then game {mouseEvent = False}
-    else game {paddle = (paddle game) {paddleVel = (0, 0)}}
+  if game ^. mouseEvent
+    then set mouseEvent False game
+    else set (paddle . paddleVel) (0, 0) game
 
 -- | Verify if the game is over (ball outside the game)
 isGameOver ::
      Game -- ^ current game state
   -> Game -- ^ updated game
 isGameOver game
-  | y < -(gameHeight / 2) = game {gameState = GameOver}
+  | y < -(gameHeight / 2) = set gameState GameOver game
   | otherwise = game
   where
-    (_, y) = ballLoc game
+    (_, y) = game ^. ballLoc

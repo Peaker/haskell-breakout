@@ -1,5 +1,6 @@
 module Maths
-  ( intersecTime
+  ( Vector, add, mul
+  , intersecTime
   , dot
   , matrixMultiplication
   ) where
@@ -10,6 +11,12 @@ type Vector = (Float, Float)
 type SquareMatrix = (Vector, Vector)
 
 type Point = (Float, Float)
+
+add :: Vector -> Vector -> Vector
+add (x0, y0) (x1, y1) = (x0+x1, y0+y1)
+
+mul :: Vector -> Vector -> Vector
+mul (x0, y0) (x1, y1) = (x0*x1, y0*y1)
 
 -- | calculate the matrix multiplication between a Vector and a SquareMatrix
 matrixMultiplication ::

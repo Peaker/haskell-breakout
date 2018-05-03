@@ -3,15 +3,19 @@ module Levels
   ) where
 
 import GameBoard
-  -- | Checks if the bricks list is empty, next level
+
+import Control.Lens
+
+-- | Checks if the bricks list is empty, next level
 
 isLevelOver :: Game -> Game
-isLevelOver game@Game {bricks = []} =
+isLevelOver game
+  | null (game ^. bricks) =
   if isWin
-    then game {gameState = Win}
+    then set gameState Win game
     else newLevelState (gameLevel + 1) score
   where
-    gameLevel = level game
-    score = gameScore game
+    gameLevel = game ^. level
+    score = game ^. gameScore
     isWin = gameLevel > 9
 isLevelOver game = game
